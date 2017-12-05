@@ -7,7 +7,7 @@ using CppAD::AD;
 
 // TODO: Set the timestep length and duration
 size_t N = 10;
-double dt = 0.2;
+double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -22,7 +22,7 @@ double dt = 0.2;
 const double Lf = 2.67;
 
 // Reference speed
-double ref_v = 45;
+double ref_v = 50;
 
 size_t x_start = 0;
 size_t y_start = x_start + N;
@@ -51,21 +51,21 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (unsigned int t = 0; t < N; t++) {
-      fg[0] += 20 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 40 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 30* CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 300 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 90 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 50* CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of actuators.
     for (unsigned int t = 0; t < N - 1; t++) {
-      fg[0] += 4500 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 1000 * CppAD::pow(vars[delta_start + t], 2);
       fg[0] += 1500 * CppAD::pow(vars[a_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (unsigned int t = 0; t < N - 2; t++) {
-      fg[0] += 1500 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 500 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 5000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 1000 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     // Setup Constraints
@@ -134,19 +134,33 @@ class FG_eval {
 //
 // MPC class definition implementation.
 //
-MPC::MPC() {}
+MPC::MPC() {
+  is_initial_run_ = true;
+}
 MPC::~MPC() {}
 
-vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
+vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, double current_steer, double current_throttle) {
   bool ok = true;
   //size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
-  double x = state[0];
-  double y = state[1];
-  double psi = state[2];
-  double v = state[3];
-  double cte = state[4];
-  double epsi = state[5]; 
+  // state without delay
+  // double x = state[0];
+  // double y = state[1];
+  // double psi = state[2];
+  // double v = state[3];
+  // double cte = state[4];
+  // double epsi = state[5]; 
+
+  // state with delay
+  const double delay = 0.1; // 100ms delay
+  double x = state[0] + state[3] * cos(state[2]) * delay;
+  double y = state[1] + state[3] * sin(state[2]) * delay;
+  double psi = state[2] - state[3] * current_steer / Lf * delay;
+  double v = state[3] + current_throttle * delay;
+  double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
+  double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
+  double cte = f - state[1] + state[3] * sin(state[5]) * delay;
+  double epsi = state[2] - psides + state[3] * current_steer / Lf * delay;
 
   // TODO: Set the number of model variables (includes both states and inputs).
   // For example: If the state is a 4 element vector, the actuators is a 2
@@ -234,7 +248,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
   // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
   // Change this as you see fit.
-  options += "Numeric max_cpu_time          0.5\n";
+  options += "Numeric max_cpu_time          0.25\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;

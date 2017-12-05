@@ -79,7 +79,10 @@ int main() {
   // MPC is initialized here!
   MPC mpc;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  // hold coefficients
+  Eigen::VectorXd previous_coeffs;
+
+  h.onMessage([&mpc, & previous_coeffs](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -100,6 +103,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          double current_steer = j[1]["steering_angle"];
+          double current_throttle = j[1]["throttle"];
           
           /*
           * TODO: Calculate steering angle and throttle using MPC.
@@ -125,7 +130,30 @@ int main() {
           double* ptry = &vehicle_ptsy[0];
           Eigen::Map<Eigen::VectorXd> vehicle_ptsx_fit(ptrx, ptsx.size());
           Eigen::Map<Eigen::VectorXd> vehicle_ptsy_fit(ptry, ptsy.size());
-          auto coeffs = polyfit(vehicle_ptsx_fit, vehicle_ptsy_fit, 3);
+          // Calculated coefficients
+          auto cal_coeffs = polyfit(vehicle_ptsx_fit, vehicle_ptsy_fit, 3);
+          Eigen::VectorXd coeffs = cal_coeffs;
+
+          // Coefficients sanity check, starting from the second step
+          if (mpc.is_initial_run_) {
+            previous_coeffs = coeffs;
+            mpc.is_initial_run_ = false;
+          }
+          else {
+            if (abs(cal_coeffs[0])>200*abs(previous_coeffs[0])
+                || abs(cal_coeffs[1])>200*abs(previous_coeffs[1]) 
+                || abs(cal_coeffs[2])>10000*abs(previous_coeffs[2])
+              ) {
+              for(int i = 0; i < coeffs.size(); i++) {
+                coeffs[i] = 0.8 * previous_coeffs[i] + 0.2 * cal_coeffs[i];
+              }
+              std::cout << "Update coefficients failed. Using previous coefficients." << std::endl;
+            }
+            else {
+              previous_coeffs = coeffs;
+              std::cout << "Updated coefficients." << std::endl;
+            }
+          }
 
           // Compute CTE. px, py, psi are 0 in vehicle coordinate system
           double cte = polyeval(coeffs, 0.0) - 0.0;
@@ -136,7 +164,7 @@ int main() {
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, cte, epsi;
 
-          auto solution = mpc.Solve(state, coeffs);
+          auto solution = mpc.Solve(state, coeffs, current_steer, current_throttle);
 
           steer_value = solution[0] / deg2rad(25);
           throttle_value = solution[1];
