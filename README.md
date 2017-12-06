@@ -3,6 +3,18 @@ Self-Driving Car Engineer Nanodegree Program
 
 ---
 
+## Reflection
+* Model Description  
+In this project, a kinematic vehicle model is used.  
+The states are:
+ * x: longitudinal position of the vehicle
+ * y: lateral position of the vehicle
+ * psi: heading of the vehicle
+ * v: longitudinal speed of the vehicle
+ * cte: cross-track error
+ * epsi: heading error
+The 
+
 ## Dependencies
 
 * cmake >= 3.5
