@@ -51,22 +51,22 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (unsigned int t = 0; t < N; t++) {
-      fg[0] += 2300 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 1600 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 320* CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 500 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 1200 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 20* CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of actuators.
     for (unsigned int t = 0; t < N - 1; t++) {
-      fg[0] += 1500 * CppAD::pow(vars[delta_start + t], 2);
-      fg[0] += 3300 * CppAD::pow(vars[a_start + t], 2);
-      fg[0] += 15000 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
+      fg[0] += 50000 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 50 * CppAD::pow(vars[a_start + t], 2);
+      fg[0] += 300 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (unsigned int t = 0; t < N - 2; t++) {
-      fg[0] += 9000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 5000 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 50000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 50 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     // Setup Constraints
@@ -127,7 +127,7 @@ class FG_eval {
       fg[1 + psi_start + t] = psi1 - (psi0 - v0 * delta0 / Lf * dt);
       fg[1 + v_start + t] = v1 - (v0 + a0 * dt);
       fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0 * delta0 / Lf * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0 * delta0 / Lf * dt);
     }
   }
 };
@@ -161,7 +161,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, double 
   double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
   double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
   double cte = f - state[1] + state[3] * sin(state[5]) * delay;
-  double epsi = state[2] - psides + state[3] * current_steer / Lf * delay;
+  double epsi = state[2] - psides - state[3] * current_steer / Lf * delay;
 
   // TODO: Set the number of model variables (includes both states and inputs).
   // For example: If the state is a 4 element vector, the actuators is a 2
