@@ -1,7 +1,6 @@
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
 
-Link to [video](https://youtu.be/Sd2btdXgrNo)
 ---
 
 ## Reflection  
@@ -32,9 +31,8 @@ Update equations:
 * epsi[t+1] = psi[t] - psides[t] - v[t] * delta[t] / Lf * dt  
 Note that due to sign convention, the sign of delta is flipped.
 ### Choosing N and dt  
-Choosing suitable N and dt is very important for the MPC control problem. I chose N = 10 and dt = 0.08.  
-I started with N = 10 and dt = 0.25. However, it turns out that dt is too large. The problem with too large a dt is that it neglects the fact that our model is an approximation and our optimization routine assumes that the model is perfectly executed. In reality, for example, due to latency with accuator at each time step, unless the latency is considered for *every* step in the optimization loop, the model tends to lose the ability to adapt to changes in the enviroment.  
-Another issue worth mentioning is that a longer dt expands the solution space for an "Optimal" solution. This is generally a good thing. However, during my tuning, I found that a large dt will sometimes cause the optimizer to converge to a path and actuator solution that doesn't make sense. By having a small dt I resolved the problem.  
+Choosing suitable N and dt is very important for the MPC control problem. I chose N = 10 and dt = 0.2.  
+I started with N = 10 and dt = 0.1. The result actually worked fine. I was monitoring the latency on my machine and it was closer to 0.25 seconds. This means that even though I set the time step to be 0.1s, it is actually never executed like that.  A dt value of 0.2 is neither to high nor too low which provides a good timestep resolution and is a better approximation of reality.  
 Increasing the number of N will further discretize the problem, assuming the same prediction horizion, corresponding to a small dt. However, increasing N will greatly increase computation time and an optimal solution is not guaranteed to be found for a limited planning window.  
 
 ### Polynomial fitting and MPC preprocessing    
@@ -52,24 +50,38 @@ The beauty of this transformaion is that when we are creating polynomial with in
 
 Cost function is slightly modified. There is an additional cost added.  
 ```cpp
-fg[0] += 300 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
+fg[0] += 500 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
 ```
 It penalizes the product of steer and throttle. The reason is that the model does not take into account the dynamics of the system and the vehicle's ability to turn under acceleration. Although I am not sure about the actual vehicle model in Unity, I think this is a very good protection to limitations of the simplified model. As for the tuning of the cost weights, I put heavy weights on the change in steer and throttle and also heavy weight on the cost of using steer. My goal is to have a silky ride and maintain a constant speed.  
 As for the tuning of the parameters, it is important to get an understanding of the magnitude of all the states. This enables a quick convergence to a good solution. For example, CTE is in the range of (-5, 5), steer is in the range of (-0.5, 0.5). If I want to have actuation cost heavier than CTE, I should use a weight on steer that is at least 100 times that of CTE.  
 
 ### Model Predictive Control with Latency  
-To consider the latency, the states that are used are modified before being sent to the optimizer. A state update is run with vehicle state transition equations with a timestep equal to the latency, 100ms in this case. This way, when the optimized actuation is excuted (first step), the execution corresponds to the state at 100ms later.
+To consider the latency, the states that are used are modified before being sent to the optimizer. A state update is run with vehicle state transition equations with a timestep equal to the latency, which is a dynamic value computed by `std::chrono::system_clock::now()`. Another funciton in `main.cpp` called `predict` predicts one step based on current state and returns a state vector that is suitable for MPC controller.
 ```cpp
-// state with delay
-const double delay = 0.1; // 100ms delay
-double x = x0 + v0 * cos(psi0) * delay;
-double y = y0 + v0 * sin(psi0) * delay;
-double psi = psi0 - v0 * current_steer / Lf * delay;
-double v = v0 + current_throttle * delay;
-double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
-double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
-double cte = f - y0 + v0 * sin(epsi0) * delay;
-double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
+Eigen::VectorXd predict(Eigen::VectorXd state, double delay, 
+                        double current_steer, double current_throttle, Eigen::VectorXd coeffs, double Lf) {
+  // current state
+  double x0 = state[0];
+  double y0 = state[1];
+  double psi0 = state[2];
+  double v0 = state[3];
+  // double cte0 = state[4];
+  double epsi0 = state[5]; 
+  // state after delay
+  double x = x0 + v0 * cos(psi0) * delay;
+  double y = y0 + v0 * sin(psi0) * delay;
+  double psi = psi0 - v0 * current_steer / Lf * delay;
+  double v = v0 + current_throttle * delay;
+  double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
+  double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
+  double cte = f - y0 + v0 * sin(epsi0) * delay;
+  double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
+
+  Eigen::VectorXd return_state(6);
+  return_state << x, y, psi, v, cte, epsi;
+
+  return return_state;
+}
 ```
 
 ---
