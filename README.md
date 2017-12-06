@@ -4,16 +4,81 @@ Self-Driving Car Engineer Nanodegree Program
 ---
 
 ## Reflection
-* Model Description  
+### Model Description  
 In this project, a kinematic vehicle model is used.  
-The states are:
- * x: longitudinal position of the vehicle
- * y: lateral position of the vehicle
- * psi: heading of the vehicle
- * v: longitudinal speed of the vehicle
- * cte: cross-track error
- * epsi: heading error
-The 
+
+The states are:  
+* x: longitudinal position of the vehicle
+* y: lateral position of the vehicle
+* psi: heading of the vehicle
+* v: longitudinal speed of the vehicle
+* cte: cross-track error
+* epsi: heading error  
+
+The actuators are:  
+* delta: steer angle
+* a: throttle    
+
+Update equations:  
+* x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
+* y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
+* psi_[t+1] = psi[t] - v[t] / Lf * delta[t] * dt
+* v_[t+1] = v[t] + a[t] * dt
+* cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
+* epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt  
+Note that due to sign convention, the sign of delta is flipped.
+### Choosing N and dt  
+Choosing suitable N and dt is very important for the MPC control problem. I chose N = 10 and dt = 0.08.  
+I started with N = 10 and dt = 0.25. However, it turns out that dt is too large. The problem with too large a dt is that it neglects the fact that our model is an approximation and our optimization routine assumes that the model is perfectly executed. In reality, for example, due to latency with accuator at each time step, unless the latency is considered for *every* step in the optimization loop, the model tends to lose the ability to adapt to changes in the enviroment.  
+Another issue worth mentioning is that a longer dt expands the solution space for an "Optimal" solution. This is generally a good thing. However, during my tuning, I found that a large dt will sometimes cause the optimizer to converge to a path and actuator solution that doesn't make sense. By having a small dt resolved the problem.  
+Increasing the number of N will further discretize the problem, assuming the same predictio horiziont, corresponding to a small dt. However, increasing N will greatly increase computation time and an optimal solution is not guaranteed to be found for a limited planning window.  
+
+### Polynomial fitting and MPC preprocessing    
+For polynomial fitting, I implemented a function called `global2vehicle`. This function transforms waypoint from global coordinate system to vehicle coordinate system. This is good both for visualization and simplifying the problem.  
+```cpp
+std::vector<double> global2vehicle(double global_x, double global_y, double px, 
+                                   double py, double psi) {
+  double vehicle_x = (global_x - px) * cos(psi) + (global_y - py) * sin(psi);
+  double vehicle_y = -(global_x - px) * sin(psi) + (global_y - py) * cos(psi);
+
+  return {vehicle_x, vehicle_y};  
+}
+```
+The beauty of this transformaion is that when we are creating polynomial with in vehicle coordinate system, the initla state of the vehicle will always be px = 0, py = 0 and psi=0.  
+
+To make a more robust polynomial coefficient vector, a sanity check routine is implemented. This routine will make sure that the newly fitted coefficient is not too drastically different from the previous one. If discrepency occurs, previous fitting will be taken into account to create a more smooth curve.  
+```cpp
+// Calculated coefficients
+auto cal_coeffs = polyfit(vehicle_ptsx_fit, vehicle_ptsy_fit, 3);
+Eigen::VectorXd coeffs = cal_coeffs;
+
+// Coefficients sanity check, starting from the second step
+if (mpc.is_initial_run_) {
+  previous_coeffs = coeffs;
+  mpc.is_initial_run_ = false;
+}
+else {
+  if (abs(cal_coeffs[0])>1000*abs(previous_coeffs[0])
+      || abs(cal_coeffs[1])>1000*abs(previous_coeffs[1]) 
+      || abs(cal_coeffs[2])>25000*abs(previous_coeffs[2])
+    ) {
+    for(int i = 0; i < coeffs.size(); i++) {
+      coeffs[i] = 0.4 * previous_coeffs[i] + 0.6 * cal_coeffs[i];
+    }
+    std::cout << "Update coefficients failed. Using previous coefficients." << std::endl;
+  }
+  else {
+    previous_coeffs = coeffs;
+    std::cout << "Updated coefficients." << std::endl;
+  }
+}
+```
+Cost function is slightly modified.
+### Model Predictive Control with Latency  
+To consider the latency, the states that are used are modified before being sent to the optimizer. A state update is run with vehicle state transition equations with a timestep equal to the latency, 100ms in this case. This way, when the optimized actuation is excuted (first step), the execution corresponds to the state at 100ms later.
+
+
+---
 
 ## Dependencies
 
