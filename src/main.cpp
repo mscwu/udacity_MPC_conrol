@@ -140,12 +140,12 @@ int main() {
             mpc.is_initial_run_ = false;
           }
           else {
-            if (abs(cal_coeffs[0])>200*abs(previous_coeffs[0])
-                || abs(cal_coeffs[1])>200*abs(previous_coeffs[1]) 
-                || abs(cal_coeffs[2])>10000*abs(previous_coeffs[2])
+            if (abs(cal_coeffs[0])>1000*abs(previous_coeffs[0])
+                || abs(cal_coeffs[1])>1000*abs(previous_coeffs[1]) 
+                || abs(cal_coeffs[2])>25000*abs(previous_coeffs[2])
               ) {
               for(int i = 0; i < coeffs.size(); i++) {
-                coeffs[i] = 0.8 * previous_coeffs[i] + 0.2 * cal_coeffs[i];
+                coeffs[i] = 0.4 * previous_coeffs[i] + 0.6 * cal_coeffs[i];
               }
               std::cout << "Update coefficients failed. Using previous coefficients." << std::endl;
             }
