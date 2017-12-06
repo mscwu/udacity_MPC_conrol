@@ -62,14 +62,14 @@ To consider the latency, the states that are used are modified before being sent
 ```cpp
 // state with delay
 const double delay = 0.1; // 100ms delay
-double x = state[0] + state[3] * cos(state[2]) * delay;
-double y = state[1] + state[3] * sin(state[2]) * delay;
-double psi = state[2] - state[3] * current_steer / Lf * delay;
-double v = state[3] + current_throttle * delay;
-double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
-double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
-double cte = f - state[1] + state[3] * sin(state[5]) * delay;
-double epsi = state[2] - psides - state[3] * current_steer / Lf * delay;
+double x = x0 + v0 * cos(psi0) * delay;
+double y = y0 + v0 * sin(psi0) * delay;
+double psi = psi0 - v0 * current_steer / Lf * delay;
+double v = v0 + current_throttle * delay;
+double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
+double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
+double cte = f - y0 + v0 * sin(epsi0) * delay;
+double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
 ```
 
 ---
