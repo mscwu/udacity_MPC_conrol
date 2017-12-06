@@ -1,9 +1,13 @@
 # CarND-Controls-MPC
 Self-Driving Car Engineer Nanodegree Program
 
+Link to [video](https://youtu.be/Sd2btdXgrNo)
 ---
 
-## Reflection
+## Reflection  
+**NOTE: Please use 640 * 480 resolution and fastest graphics quality setting for the simulator!**
+
+
 ### Model Description  
 In this project, a kinematic vehicle model is used.  
 
@@ -46,33 +50,6 @@ std::vector<double> global2vehicle(double global_x, double global_y, double px,
 ```
 The beauty of this transformaion is that when we are creating polynomial with in vehicle coordinate system, the initla state of the vehicle will always be px = 0, py = 0 and psi=0.  
 
-To make a more robust polynomial coefficient vector, a sanity check routine is implemented. This routine will make sure that the newly fitted coefficient is not too drastically different from the previous one. If discrepency occurs, previous fitting will be taken into account to create a more smooth curve.  
-```cpp
-// Calculated coefficients
-auto cal_coeffs = polyfit(vehicle_ptsx_fit, vehicle_ptsy_fit, 3);
-Eigen::VectorXd coeffs = cal_coeffs;
-
-// Coefficients sanity check, starting from the second step
-if (mpc.is_initial_run_) {
-  previous_coeffs = coeffs;
-  mpc.is_initial_run_ = false;
-}
-else {
-  if (abs(cal_coeffs[0])>1000*abs(previous_coeffs[0])
-      || abs(cal_coeffs[1])>1000*abs(previous_coeffs[1]) 
-      || abs(cal_coeffs[2])>25000*abs(previous_coeffs[2])
-    ) {
-    for(int i = 0; i < coeffs.size(); i++) {
-      coeffs[i] = 0.4 * previous_coeffs[i] + 0.6 * cal_coeffs[i];
-    }
-    std::cout << "Update coefficients failed. Using previous coefficients." << std::endl;
-  }
-  else {
-    previous_coeffs = coeffs;
-    std::cout << "Updated coefficients." << std::endl;
-  }
-}
-```
 Cost function is slightly modified. There is an additional cost added.  
 ```cpp
 fg[0] += 300 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
