@@ -7,7 +7,7 @@ using CppAD::AD;
 
 // TODO: Set the timestep length and duration
 size_t N = 10;
-double dt = 0.08;
+double dt = 0.1;
 
 // This value assumes the model presented in the classroom is used.
 //
@@ -22,7 +22,7 @@ double dt = 0.08;
 const double Lf = 2.67;
 
 // Reference speed
-double ref_v = 52;
+double ref_v = 62 * 0.44704;
 
 size_t x_start = 0;
 size_t y_start = x_start + N;
@@ -51,22 +51,22 @@ class FG_eval {
 
     // The part of the cost based on the reference state.
     for (unsigned int t = 0; t < N; t++) {
-      fg[0] += 500 * CppAD::pow(vars[cte_start + t], 2);
-      fg[0] += 1200 * CppAD::pow(vars[epsi_start + t], 2);
-      fg[0] += 20* CppAD::pow(vars[v_start + t] - ref_v, 2);
+      fg[0] += 400 * CppAD::pow(vars[cte_start + t], 2);
+      fg[0] += 300 * CppAD::pow(vars[epsi_start + t], 2);
+      fg[0] += 12 * CppAD::pow(vars[v_start + t] - ref_v, 2);
     }
 
     // Minimize the use of actuators.
     for (unsigned int t = 0; t < N - 1; t++) {
-      fg[0] += 50000 * CppAD::pow(vars[delta_start + t], 2);
+      fg[0] += 20000 * CppAD::pow(vars[delta_start + t], 2);
       fg[0] += 50 * CppAD::pow(vars[a_start + t], 2);
-      fg[0] += 300 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
+      fg[0] += 500 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
     }
 
     // Minimize the value gap between sequential actuations.
     for (unsigned int t = 0; t < N - 2; t++) {
-      fg[0] += 50000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
-      fg[0] += 50 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+      fg[0] += 2200000 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+      fg[0] += 10 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
     }
 
     // Setup Constraints
@@ -138,36 +138,36 @@ class FG_eval {
 MPC::MPC() {}
 MPC::~MPC() {}
 
-vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs, double current_steer, double current_throttle) {
+vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
   //size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
   // state without delay
-  double x0 = state[0];
-  double y0 = state[1];
-  double psi0 = state[2];
-  double v0 = state[3];
-  // double cte0 = state[4];
-  double epsi0 = state[5]; 
+  double x = state[0];
+  double y = state[1];
+  double psi = state[2];
+  double v = state[3];
+  double cte = state[4];
+  double epsi = state[5]; 
 
-  // state with delay
-  const double delay = 0.1; // 100ms delay
-  // double x = state[0] + state[3] * cos(state[2]) * delay;
-  // double y = state[1] + state[3] * sin(state[2]) * delay;
-  // double psi = state[2] - state[3] * current_steer / Lf * delay;
-  // double v = state[3] + current_throttle * delay;
-  // double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
-  // double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
-  // double cte = f - state[1] + state[3] * sin(state[5]) * delay;
-  // double epsi = state[2] - psides - state[3] * current_steer / Lf * delay;
-  double x = x0 + v0 * cos(psi0) * delay;
-  double y = y0 + v0 * sin(psi0) * delay;
-  double psi = psi0 - v0 * current_steer / Lf * delay;
-  double v = v0 + current_throttle * delay;
-  double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
-  double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
-  double cte = f - y0 + v0 * sin(epsi0) * delay;
-  double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
+  // // state with delay
+  // const double delay = 0.6; // 150ms delay to account for communication and solver time
+  // // double x = state[0] + state[3] * cos(state[2]) * delay;
+  // // double y = state[1] + state[3] * sin(state[2]) * delay;
+  // // double psi = state[2] - state[3] * current_steer / Lf * delay;
+  // // double v = state[3] + current_throttle * delay;
+  // // double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
+  // // double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
+  // // double cte = f - state[1] + state[3] * sin(state[5]) * delay;
+  // // double epsi = state[2] - psides - state[3] * current_steer / Lf * delay;
+  // double x = x0 + v0 * cos(psi0) * delay;
+  // double y = y0 + v0 * sin(psi0) * delay;
+  // double psi = psi0 - v0 * current_steer / Lf * delay;
+  // double v = v0 + current_throttle * delay;
+  // double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
+  // double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
+  // double cte = f - y0 + v0 * sin(epsi0) * delay;
+  // double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
 
   // TODO: Set the number of model variables (includes both states and inputs).
   // For example: If the state is a 4 element vector, the actuators is a 2

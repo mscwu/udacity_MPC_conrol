@@ -4,6 +4,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <chrono>
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
@@ -73,14 +74,41 @@ std::vector<double> global2vehicle(double global_x, double global_y, double px,
   return {vehicle_x, vehicle_y};  
 }
 
+Eigen::VectorXd predict(Eigen::VectorXd state, double delay, 
+                        double current_steer, double current_throttle, Eigen::VectorXd coeffs, double Lf) {
+  // current state
+  double x0 = state[0];
+  double y0 = state[1];
+  double psi0 = state[2];
+  double v0 = state[3];
+  // double cte0 = state[4];
+  double epsi0 = state[5]; 
+  // state after delay
+  double x = x0 + v0 * cos(psi0) * delay;
+  double y = y0 + v0 * sin(psi0) * delay;
+  double psi = psi0 - v0 * current_steer / Lf * delay;
+  double v = v0 + current_throttle * delay;
+  double f = coeffs[0] + coeffs[1] * x0 + coeffs[2] * pow(x0, 2) + coeffs[3] * pow(x0, 3);
+  double psides = atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * pow(x0, 2));
+  double cte = f - y0 + v0 * sin(epsi0) * delay;
+  double epsi = psi0 - psides - v0 * current_steer / Lf * delay;
+
+  Eigen::VectorXd return_state(6);
+  return_state << x, y, psi, v, cte, epsi;
+
+  return return_state;
+}
+
 int main() {
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
 
+  const double Lf = 2.67;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  auto start = std::chrono::system_clock::now();
+  h.onMessage([&mpc, &start, &Lf](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -101,6 +129,8 @@ int main() {
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+          // convert to m/s
+          v *= 0.44704;
           double current_steer = j[1]["steering_angle"];
           double current_throttle = j[1]["throttle"];
           
@@ -140,8 +170,12 @@ int main() {
 
           Eigen::VectorXd state(6);
           state << 0, 0, 0, v, cte, epsi;
-
-          auto solution = mpc.Solve(state, coeffs, current_steer, current_throttle);
+          auto end = std::chrono::system_clock::now();
+          std::chrono::duration<double> delay = end-start;
+          start = end;
+          std::cout << "Latency: "<< delay.count() << std::endl;
+          auto input_state = predict(state, delay.count(), current_steer, current_throttle, coeffs, Lf);
+          auto solution = mpc.Solve(input_state, coeffs);
 
           steer_value = solution[0] / deg2rad(25);
           throttle_value = solution[1];
