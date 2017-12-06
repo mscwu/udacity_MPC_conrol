@@ -8,7 +8,6 @@ using namespace std;
 
 class MPC {
  public:
- 	bool is_initial_run_;
   MPC();
 
   virtual ~MPC();
