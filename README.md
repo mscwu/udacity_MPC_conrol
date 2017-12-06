@@ -25,7 +25,7 @@ Update equations:
 * psi_[t+1] = psi[t] - v[t] / Lf * delta[t] * dt
 * v_[t+1] = v[t] + a[t] * dt
 * cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
-* epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt  
+* epsi[t+1] = psi[t] - psides[t] - v[t] * delta[t] / Lf * dt  
 Note that due to sign convention, the sign of delta is flipped.
 ### Choosing N and dt  
 Choosing suitable N and dt is very important for the MPC control problem. I chose N = 10 and dt = 0.08.  
@@ -73,10 +73,27 @@ else {
   }
 }
 ```
-Cost function is slightly modified.
+Cost function is slightly modified. There is an additional cost added.  
+```cpp
+fg[0] += 300 * CppAD::pow(vars[a_start + t] * vars[delta_start + t], 2);
+```
+It penalizes the product of steer and throttle. The reason is that the model does not take into account the dynamics of the system and the vehicle's ability to turn under acceleration. Although I am not sure about the actual vehicle model in Unity, I think this is a very good protection to limitations of the simplified model. As for the tuning of the cost weights, I put heavy weights on the change in steer and throttle and also heavy weight on the cost of using steer. My goal is to have a silky ride and maintain a constant speed.  
+As for the tuning of the parameters, it is important to get an understanding of the magnitude of all the states. This enables a quick convergence to a good solution. For example, CTE is in the range of (-5, 5), steer is in the range of (-0.5, 0.5). If I want to have actuation cost heavier than CTE, I should use a weight on steer that is at least 100 times that of CTE.  
+
 ### Model Predictive Control with Latency  
 To consider the latency, the states that are used are modified before being sent to the optimizer. A state update is run with vehicle state transition equations with a timestep equal to the latency, 100ms in this case. This way, when the optimized actuation is excuted (first step), the execution corresponds to the state at 100ms later.
-
+```cpp
+// state with delay
+const double delay = 0.1; // 100ms delay
+double x = state[0] + state[3] * cos(state[2]) * delay;
+double y = state[1] + state[3] * sin(state[2]) * delay;
+double psi = state[2] - state[3] * current_steer / Lf * delay;
+double v = state[3] + current_throttle * delay;
+double f = coeffs[0] + coeffs[1] * state[0] + coeffs[2] * pow(state[0], 2) + coeffs[3] * pow(state[0], 3);
+double psides = atan(coeffs[1] + 2 * coeffs[2] * state[0] + 3 * coeffs[3] * pow(state[0], 2));
+double cte = f - state[1] + state[3] * sin(state[5]) * delay;
+double epsi = state[2] - psides - state[3] * current_steer / Lf * delay;
+```
 
 ---
 
